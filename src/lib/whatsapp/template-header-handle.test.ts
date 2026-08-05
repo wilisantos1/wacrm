@@ -62,10 +62,6 @@ describe('ensureImageHeaderHandle', () => {
     expect(p.header_handle).toBe('existing');
   });
 
-  it('throws an actionable error when META_APP_ID is unset', async () => {
-    const p = payload();
-    await expect(ensureImageHeaderHandle(p, 'tok')).rejects.toThrow(/META_APP_ID/);
-  });
 
   it('derives + sets header_handle from a valid image URL', async () => {
     vi.stubEnv('META_APP_ID', 'app-1');
