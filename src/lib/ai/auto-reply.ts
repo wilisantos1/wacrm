@@ -7,10 +7,12 @@ import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
+import { loadAiTools } from './load-tools'
 import { engineSendText } from '@/lib/flows/meta-send'
 import { checkRateLimit, RATE_LIMITS } from '@/lib/rate-limit'
+import { sendTypingIndicator } from '@/lib/whatsapp/meta-api'
 
-interface DispatchArgs {
+export interface DispatchArgs {
   /** Tenancy key — drives config, contact, and whatsapp_config lookups. */
   accountId: string
   conversationId: string
@@ -18,6 +20,12 @@ interface DispatchArgs {
   /** The account's WhatsApp config owner, used for the outbound send's
    *  audit columns (mirrors how the flow runner passes it through). */
   configOwnerUserId: string
+  /** Meta phone_number_id — only needed when typingIndicatorEnabled. */
+  phoneNumberId?: string
+  /** Decrypted Meta access token — only needed when typingIndicatorEnabled. */
+  accessToken?: string
+  /** Show the "escribiendo..." bubble while this reply is generated. */
+  typingIndicatorEnabled?: boolean
 }
 
 /**
@@ -112,10 +120,42 @@ export async function dispatchInboundToAiReply(
       knowledge,
     })
 
+    // Best-effort typing indicator. Meta ties it to the most recent
+    // inbound message from this customer — a failure here (e.g. a
+    // transient Meta error) must never block the actual reply.
+    if (args.typingIndicatorEnabled && args.phoneNumberId && args.accessToken) {
+      const { data: lastInbound } = await db
+        .from('messages')
+        .select('message_id')
+        .eq('conversation_id', conversationId)
+        .eq('sender_type', 'customer')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (lastInbound?.message_id) {
+        try {
+          await sendTypingIndicator({
+            phoneNumberId: args.phoneNumberId,
+            accessToken: args.accessToken,
+            messageId: lastInbound.message_id,
+          })
+        } catch (err) {
+          console.warn(
+            '[ai auto-reply] typing indicator failed:',
+            err instanceof Error ? err.message : err,
+          )
+        }
+      }
+    }
+
+    const { definitions: tools, executeTool } = await loadAiTools(db, accountId)
+
     const { text, handoff, usage } = await generateReply({
       config,
       systemPrompt,
       messages,
+      tools,
+      executeTool,
     })
 
     // Record token spend on the account's BYO key. Fire-and-forget so it
@@ -134,12 +174,27 @@ export async function dispatchInboundToAiReply(
 
     if (handoff || !text) {
       // The model can't (or shouldn't) answer — stop auto-replying on
-      // this thread and hand it to a human. We (a) pause the bot here
-      // (sticky until re-enabled), (b) route the conversation to the
+      // this thread and hand it to a human. We (a) send whatever
+      // customer-facing text the model wrote before the sentinel, if
+      // any — the system prompt asks it to keep the reply feeling
+      // human rather than going silent — (b) pause the bot here
+      // (sticky until re-enabled), (c) route the conversation to the
       // configured handoff agent — null leaves it in the shared queue —
-      // and (c) leave a short internal note so whoever picks it up has
+      // and (d) leave a short internal note so whoever picks it up has
       // context. Assigning fires the `on_conversation_assigned` trigger,
-      // which notifies the agent.
+      // which notifies the agent; the shared-queue case is notified
+      // separately by the `ai_handoff_summary` trigger.
+      if (text) {
+        await engineSendText({
+          accountId,
+          userId: configOwnerUserId,
+          conversationId,
+          contactId,
+          text,
+          aiGenerated: true,
+        })
+      }
+
       const summary = buildHandoffSummary({
         messages,
         replyCount: conv.ai_reply_count ?? 0,

@@ -13,6 +13,33 @@ import type { AiProvider } from './types'
 export const AI_PROVIDER_DEFAULT_MODEL: Record<AiProvider, string> = {
   openai: 'gpt-5.4-mini',
   anthropic: 'claude-haiku-4-5-20251001',
+  gemini: 'gemini-2.5-flash',
+}
+
+/** Current Gemini text-generation models, offered as suggestions (not a
+ *  hard allow-list — see the note above) in the settings model field. */
+export const GEMINI_SUGGESTED_MODELS = [
+  'gemini-2.5-pro',
+  'gemini-2.5-flash',
+  'gemini-2.5-flash-lite',
+  'gemini-2.0-flash',
+  'gemini-2.0-flash-lite',
+] as const
+
+/**
+ * Sampling temperature: valid range shared across all three providers
+ * (Anthropic caps at 1; OpenAI/Gemini allow up to 2) and the default
+ * used when a config predates the `temperature` column — matches each
+ * provider's own implicit default when the param is omitted, so
+ * existing accounts behave identically until an admin changes it.
+ */
+export const TEMPERATURE_MIN = 0
+export const TEMPERATURE_MAX = 1
+export const DEFAULT_TEMPERATURE = 1
+
+export function clampTemperature(value: number): number {
+  if (!Number.isFinite(value)) return DEFAULT_TEMPERATURE
+  return Math.min(TEMPERATURE_MAX, Math.max(TEMPERATURE_MIN, value))
 }
 
 /**
@@ -28,11 +55,20 @@ export const MAX_OUTPUT_TOKENS = 1024
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 const DEFAULT_CONTEXT_MESSAGE_LIMIT = 20
+const DEFAULT_MAX_PROVIDER_ATTEMPTS = 3
 
 /** Per-call provider timeout. Override with `AI_REQUEST_TIMEOUT_MS`. */
 export function aiRequestTimeoutMs(): number {
   const raw = Number(process.env.AI_REQUEST_TIMEOUT_MS)
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_REQUEST_TIMEOUT_MS
+}
+
+/** Total attempts (including the first) for a transient provider failure
+ *  — timeout, network error, rate limit, or upstream 5xx. Mirrors n8n's
+ *  "Retry On Fail / Max Tries". Override with `AI_MAX_PROVIDER_ATTEMPTS`. */
+export function aiMaxProviderAttempts(): number {
+  const raw = Number(process.env.AI_MAX_PROVIDER_ATTEMPTS)
+  return Number.isFinite(raw) && raw > 0 ? Math.floor(raw) : DEFAULT_MAX_PROVIDER_ATTEMPTS
 }
 
 /** How many recent text messages to feed the model. Override with
@@ -68,7 +104,7 @@ export function buildSystemPrompt(args: {
 
   if (mode === 'auto_reply') {
     parts.push(
-      `You are replying automatically with no human in the loop. If you cannot confidently and safely help — the customer explicitly asks for a human, is upset or complaining, or the request needs information you do not have — reply with exactly ${HANDOFF_SENTINEL} and nothing else. A human agent will then take over. Prefer handing off over guessing.`,
+      `You are replying automatically with no human in the loop. If you cannot confidently and safely help — the customer explicitly asks for a human, is upset or complaining, or the request needs information you do not have — write a short, natural reply that keeps the conversation feeling human (e.g. that you're looking into it and will follow up shortly). Never mention that you are an AI/bot, that you are transferring or escalating the chat, or that a different person will take over — the customer should feel like they're still talking to the same person. Then, on a new line by itself, output exactly ${HANDOFF_SENTINEL}. A human agent will silently take over from there. Prefer handing off over guessing.`,
     )
   }
 

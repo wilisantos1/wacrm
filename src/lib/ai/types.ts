@@ -6,7 +6,7 @@
 // whether the account is on OpenAI or Anthropic.
 // ============================================================
 
-export type AiProvider = 'openai' | 'anthropic'
+export type AiProvider = 'openai' | 'anthropic' | 'gemini'
 
 /**
  * Account AI setup, decrypted and ready to use. Produced by
@@ -17,6 +17,10 @@ export interface AiConfig {
   provider: AiProvider
   model: string
   apiKey: string
+  /** Sampling temperature, clamped to [0, 1] — the range valid across
+   *  all three providers (Anthropic caps at 1; OpenAI/Gemini allow up
+   *  to 2 but 0–1 is the useful range for an on-brand support bot). */
+  temperature: number
   systemPrompt: string | null
   isActive: boolean
   autoReplyEnabled: boolean
@@ -36,6 +40,30 @@ export interface ChatMessage {
   role: 'user' | 'assistant'
   content: string
 }
+
+/**
+ * A function the model can call mid-reply (migration 042 — connected
+ * Google Sheets). Translated into each provider's own wire format by
+ * its adapter (`providers/{openai,anthropic,gemini}.ts`); `parameters`
+ * is a JSON Schema object, the one shape all three accept.
+ */
+export interface ToolDefinition {
+  name: string
+  description: string
+  parameters: {
+    type: 'object'
+    properties: Record<string, unknown>
+    required: string[]
+  }
+}
+
+/** Executes a tool call by name and returns its result as text —
+ *  never throws; failures are returned as a readable error string so
+ *  the model can tell the customer it couldn't look something up. */
+export type ExecuteTool = (
+  name: string,
+  args: Record<string, unknown>,
+) => Promise<string>
 
 /**
  * Token counts for one provider call, normalized across OpenAI

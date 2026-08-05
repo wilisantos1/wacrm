@@ -36,6 +36,18 @@ vi.mock('./admin-client', () => ({
         }
         return chain
       }
+      if (table === 'ai_tools') {
+        // .select().eq('account_id').eq('is_active') → connected tools
+        // (loadAiTools). Empty by default — no test in this file
+        // configures any tools, so generateReply should see tools: [].
+        const chain = {
+          select: () => chain,
+          eq: () => chain,
+          then: (resolve: (v: { data: unknown[]; error: null }) => void) =>
+            resolve({ data: [], error: null }),
+        }
+        return chain
+      }
       // conversations
       return {
         select: () => ({
@@ -71,6 +83,7 @@ function aiConfig(overrides: Partial<AiConfig> = {}): AiConfig {
     provider: 'openai',
     model: 'gpt-test',
     apiKey: 'sk-test',
+    temperature: 1,
     systemPrompt: null,
     isActive: true,
     autoReplyEnabled: true,
@@ -208,5 +221,22 @@ describe('dispatchInboundToAiReply — handoff', () => {
       ai_autoreply_disabled: true,
       assigned_agent_id: 'agent-7',
     })
+  })
+
+  it('sends the model-written text to the customer before pausing, on handoff', async () => {
+    h.generateReply.mockResolvedValue({
+      text: 'Let me look into that and get back to you.',
+      handoff: true,
+    })
+    await dispatchInboundToAiReply(ARGS)
+    expect(h.engineSendText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        conversationId: 'conv-1',
+        text: 'Let me look into that and get back to you.',
+        aiGenerated: true,
+      }),
+    )
+    expect(h.state.rpcCalls).toHaveLength(0) // no reply-slot claim on handoff
+    expect(h.state.updatePayload).toMatchObject({ ai_autoreply_disabled: true })
   })
 })
