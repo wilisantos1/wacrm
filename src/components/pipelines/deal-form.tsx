@@ -4,12 +4,14 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
-import { CURRENCIES } from "@/lib/currency";
+import { CURRENCIES, formatCurrency } from "@/lib/currency";
 import type {
   Contact,
   Conversation,
   Deal,
+  DealProduct,
   DealStatus,
+  Product,
   PipelineStage,
   Profile,
 } from "@/types";
@@ -33,6 +35,24 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
+
+type DealProductInput = Pick<
+  DealProduct,
+  "id" | "product_id" | "product_name" | "quantity" | "unit_value"
+>;
+
+function getLineTotal(item: DealProductInput) {
+  return (Math.round(item.unit_value * 100) * item.quantity) / 100;
+}
+
+function getProductsTotal(items: DealProductInput[]) {
+  return (
+    items.reduce(
+      (total, item) => total + Math.round(item.unit_value * 100) * item.quantity,
+      0,
+    ) / 100
+  );
+}
 
 interface DealFormProps {
   open: boolean;
@@ -68,6 +88,10 @@ export function DealForm({
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [dealProducts, setDealProducts] = useState<DealProductInput[]>([]);
+  const [productDataLoading, setProductDataLoading] = useState(false);
+  const [productDataError, setProductDataError] = useState(false);
   const [linkedConversation, setLinkedConversation] =
     useState<Conversation | null>(null);
 
@@ -94,6 +118,7 @@ export function DealForm({
       setAssignedTo(deal.assigned_to ?? "");
       setExpectedCloseDate(deal.expected_close_date ?? "");
       setNotes(deal.notes ?? "");
+      setDealProducts([]);
     } else {
       setTitle("");
       setValue("");
@@ -103,27 +128,61 @@ export function DealForm({
       setAssignedTo("");
       setExpectedCloseDate("");
       setNotes("");
+      setDealProducts([]);
     }
+    setProductDataError(false);
   }, [open, deal, defaultStageId, stages, defaultCurrency]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
   // Load supporting data once the sheet is open
   useEffect(() => {
-    if (!open) return;
+    if (!open || !accountId) return;
     let cancelled = false;
     (async () => {
-      const [c, p] = await Promise.all([
+      setProductDataLoading(true);
+      const [c, p, productResult, dealProductResult] = await Promise.all([
         supabase.from("contacts").select("*").order("name"),
         supabase.from("profiles").select("*").order("full_name"),
+        supabase
+          .from("products")
+          .select("id, user_id, account_id, name, value, created_at, updated_at")
+          .eq("account_id", accountId)
+          .order("name"),
+        deal
+          ? supabase
+              .from("deal_products")
+              .select("id, product_id, product_name, quantity, unit_value")
+              .eq("deal_id", deal.id)
+              .eq("account_id", accountId)
+          : Promise.resolve({ data: [], error: null }),
       ]);
       if (cancelled) return;
       setContacts((c.data ?? []) as Contact[]);
       setProfiles((p.data ?? []) as Profile[]);
+      if (productResult.error || dealProductResult.error) {
+        const error = productResult.error ?? dealProductResult.error;
+        const missingTable =
+          error?.code === "42P01" || error?.code === "PGRST205";
+        console.error("[DealForm] Failed to load product data:", {
+          message: error?.message,
+          code: error?.code,
+          details: error?.details,
+          hint: error?.hint,
+        });
+        toast.error(
+          missingTable ? t("toastProductsMigrationRequired") : t("toastLoadProducts"),
+        );
+        setProductDataError(true);
+      } else {
+        setProducts((productResult.data ?? []) as Product[]);
+        setDealProducts((dealProductResult.data ?? []) as DealProductInput[]);
+      }
+      setProductDataLoading(false);
     })();
     return () => {
       cancelled = true;
     };
-  }, [open, supabase]);
+  }, [open, deal, accountId, supabase, t]);
 
   // Fetch linked conversation for the selected contact (newest open one).
   // Clearing on no-selection is sync with prop state; the populated
@@ -156,11 +215,19 @@ export function DealForm({
       toast.error(t("toastRequired"));
       return;
     }
+    if (productDataLoading || productDataError) return;
+    if (dealProducts.some((item) => !item.product_name.trim())) {
+      toast.error(t("toastSelectProducts"));
+      return;
+    }
     setSaving(true);
 
+    const productsTotal = getProductsTotal(dealProducts);
+    const dealValue =
+      dealProducts.length > 0 ? productsTotal : parseFloat(value) || 0;
     const payload = {
       title: title.trim(),
-      value: parseFloat(value) || 0,
+      value: dealValue,
       currency,
       contact_id: contactId,
       pipeline_id: pipelineId,
@@ -170,16 +237,18 @@ export function DealForm({
       expected_close_date: expectedCloseDate || null,
     };
 
+    let dealId: string;
     if (deal) {
       const { error } = await supabase
         .from("deals")
-        .update(payload)
+        .update({ ...payload, value: deal.value })
         .eq("id", deal.id);
       if (error) {
         toast.error(t("toastFailedSave"));
         setSaving(false);
         return;
       }
+      dealId = deal.id;
     } else {
       const {
         data: { session },
@@ -195,14 +264,54 @@ export function DealForm({
         setSaving(false);
         return;
       }
-      const { error } = await supabase
+      const { data, error } = await supabase
         .from("deals")
-        .insert({ ...payload, user_id: user.id, account_id: accountId, status: "open" });
-      if (error) {
+        .insert({ ...payload, user_id: user.id, account_id: accountId, status: "open" })
+        .select("id")
+        .single();
+      if (error || !data) {
         toast.error(t("toastFailedCreate"));
         setSaving(false);
         return;
       }
+      dealId = data.id;
+    }
+
+    const { error: productsError } = await supabase.rpc("save_deal_products", {
+      p_deal_id: dealId,
+      p_items: dealProducts.map((item) => ({
+        product_id: products.some((product) => product.id === item.product_id)
+          ? item.product_id
+          : null,
+        product_name: item.product_name,
+        quantity: item.quantity,
+        unit_value: item.unit_value,
+      })),
+      p_value: dealValue,
+    });
+    if (productsError) {
+      console.error("[DealForm] Failed to save deal products:", {
+        message: productsError.message,
+        code: productsError.code,
+        details: productsError.details,
+        hint: productsError.hint,
+      });
+      if (!deal) {
+        const { error: rollbackError } = await supabase
+          .from("deals")
+          .delete()
+          .eq("id", dealId);
+        if (rollbackError) {
+          console.error("[DealForm] Failed to remove incomplete deal:", rollbackError.message);
+        }
+      }
+      toast.error(
+        productsError.code === "PGRST202"
+          ? t("toastProductsMigrationRequired")
+          : t("toastFailedSaveProducts"),
+      );
+      setSaving(false);
+      return;
     }
 
     setSaving(false);
@@ -243,6 +352,40 @@ export function DealForm({
     setConfirmDelete(false);
     onOpenChange(false);
     onSaved();
+  }
+
+  function addProduct() {
+    setDealProducts((current) => [
+      ...current,
+      {
+        id: `new-${Date.now()}-${current.length}`,
+        product_id: null,
+        product_name: "",
+        quantity: 1,
+        unit_value: 0,
+      },
+    ]);
+  }
+
+  function selectProduct(lineId: string, productId: string) {
+    const product = products.find((item) => item.id === productId);
+    if (!product) return;
+    setDealProducts((current) =>
+      current.map((line) =>
+        line.id === lineId
+          ? {
+              ...line,
+              product_id: product.id,
+              product_name: product.name,
+              unit_value: Number(product.value),
+            }
+          : line,
+      ),
+    );
+  }
+
+  function formatDealCurrency(amount: number) {
+    return formatCurrency(amount, currency);
   }
 
   return (
@@ -295,14 +438,147 @@ export function DealForm({
               )}
             </div>
 
+            <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
+              <div className="flex items-center justify-between gap-2">
+                <Label className="text-muted-foreground">{t("products")}</Label>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addProduct}
+                  disabled={productDataLoading || productDataError || products.length === 0}
+                >
+                  {t("addProduct")}
+                </Button>
+              </div>
+
+              {productDataLoading ? (
+                <p className="text-sm text-muted-foreground">{t("loadingProducts")}</p>
+              ) : products.length === 0 && dealProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground">{t("noProducts")}</p>
+              ) : (
+                <div className="space-y-3">
+                  {dealProducts.map((line) => (
+                    <div
+                      key={line.id}
+                      className="space-y-2 rounded-md border border-border bg-background p-3"
+                    >
+                      <div className="flex items-center gap-2">
+                        <select
+                          value={
+                            line.product_id ??
+                            (line.product_name ? `snapshot-${line.id}` : "")
+                          }
+                          onChange={(event) => selectProduct(line.id, event.target.value)}
+                          className="h-9 min-w-0 flex-1 rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary"
+                        >
+                          <option value="" disabled>
+                            {t("selectProduct")}
+                          </option>
+                          {!line.product_id && line.product_name && (
+                            <option value={`snapshot-${line.id}`} disabled>
+                              {line.product_name} ({t("productUnavailable")})
+                            </option>
+                          )}
+                          {products.map((product) => (
+                            <option
+                              key={product.id}
+                              value={product.id}
+                              disabled={
+                                product.id !== line.product_id &&
+                                dealProducts.some(
+                                  (selected) => selected.product_id === product.id,
+                                )
+                              }
+                            >
+                              {product.name}
+                            </option>
+                          ))}
+                        </select>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={t("removeProduct")}
+                          onClick={() =>
+                            setDealProducts((current) =>
+                              current.filter((item) => item.id !== line.id),
+                            )
+                          }
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div className="grid gap-1">
+                          <Label className="text-xs text-muted-foreground">
+                            {t("quantity")}
+                          </Label>
+                          <Input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={line.quantity}
+                            onChange={(event) => {
+                              const quantity = Math.max(
+                                1,
+                                Math.floor(Number(event.target.value) || 1),
+                              );
+                              setDealProducts((current) =>
+                                current.map((item) =>
+                                  item.id === line.id ? { ...item, quantity } : item,
+                                ),
+                              );
+                            }}
+                            className="border-border bg-muted text-foreground"
+                          />
+                        </div>
+                        <div className="grid gap-1">
+                          <span className="text-xs text-muted-foreground">
+                            {t("unitValue")}
+                          </span>
+                          <span className="flex h-9 items-center text-foreground">
+                            {formatDealCurrency(line.unit_value)}
+                          </span>
+                        </div>
+                        <div className="grid gap-1">
+                          <span className="text-xs text-muted-foreground">
+                            {t("lineTotal")}
+                          </span>
+                          <span className="flex h-9 items-center font-medium text-foreground">
+                            {formatDealCurrency(getLineTotal(line))}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {dealProducts.length > 0 && (
+                    <div className="flex items-center justify-between border-t border-border pt-3 font-semibold">
+                      <span className="text-foreground">{t("productsTotal")}</span>
+                      <span className="text-foreground">
+                        {formatDealCurrency(getProductsTotal(dealProducts))}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
             <div className="grid grid-cols-[1fr_110px] gap-3">
               <div className="grid gap-2">
                 <Label className="text-muted-foreground">{t("value")}</Label>
                 <div className="relative">
                   <DollarSign className="absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    type="number"
-                    value={value}
+                    type={dealProducts.length > 0 ? "text" : "number"}
+                    min="0"
+                    step="0.01"
+                    readOnly={dealProducts.length > 0}
+                    value={
+                      dealProducts.length > 0
+                        ? formatDealCurrency(getProductsTotal(dealProducts))
+                        : value
+                    }
                     onChange={(e) => setValue(e.target.value)}
                     placeholder="0"
                     className="border-border bg-muted pl-7 text-foreground"
@@ -439,7 +715,14 @@ export function DealForm({
               </Button>
               <Button
                 onClick={handleSave}
-                disabled={saving || !title.trim() || !contactId || !stageId}
+                disabled={
+                  saving ||
+                  productDataLoading ||
+                  productDataError ||
+                  !title.trim() ||
+                  !contactId ||
+                  !stageId
+                }
                 className="flex-1 bg-primary text-primary-foreground hover:bg-primary/90"
               >
                 {saving ? t("saving") : deal ? t("saveChanges") : t("createDeal")}

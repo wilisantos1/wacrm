@@ -388,6 +388,17 @@ export interface Deal {
   assignee?: Profile;
 }
 
+export interface DealProduct {
+  id: string;
+  deal_id: string;
+  account_id: string;
+  product_id: string | null;
+  product_name: string;
+  quantity: number;
+  unit_value: number;
+  created_at: string;
+}
+
 export type BroadcastStatus = 'draft' | 'scheduled' | 'sending' | 'sent' | 'failed';
 export type RecipientStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'replied' | 'failed';
 
