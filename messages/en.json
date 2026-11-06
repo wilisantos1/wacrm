@@ -579,7 +579,7 @@
       "confirm": "Confirm",
       "deleting": "Deleting...",
       "deleteDeal": "Delete Deal",
-      "toastRequired": "Work order, contact, and stage are required",
+      "toastRequired": "Select a contact and pipeline stage.",
       "toastInvalidDateTime": "Enter valid dates and times.",
       "toastTransportMigrationRequired": "Apply the 039_deal_transport_details.sql migration to save the operational details.",
       "toastFailedSave": "Failed to save deal",

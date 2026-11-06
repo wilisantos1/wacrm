@@ -579,7 +579,7 @@
       "confirm": "Confirmar",
       "deleting": "Excluindo...",
       "deleteDeal": "Excluir Negócio",
-      "toastRequired": "OS, cliente e etapa do funil são obrigatórios",
+      "toastRequired": "Selecione o cliente e a etapa do funil.",
       "toastInvalidDateTime": "Informe datas e horários válidos.",
       "toastTransportMigrationRequired": "Aplique a migration 039_deal_transport_details.sql para salvar os dados operacionais.",
       "toastFailedSave": "Falha ao salvar negócio",

@@ -579,7 +579,7 @@
       "confirm": "확인",
       "deleting": "삭제 중...",
       "deleteDeal": "딜 삭제",
-      "toastRequired": "작업 지시, 연락처, 단계는 필수입니다",
+      "toastRequired": "연락처와 파이프라인 단계를 선택하세요.",
       "toastInvalidDateTime": "올바른 날짜와 시간을 입력하세요.",
       "toastTransportMigrationRequired": "운영 정보를 저장하려면 039_deal_transport_details.sql 마이그레이션을 적용하세요.",
       "toastFailedSave": "딜을 저장하지 못했습니다",

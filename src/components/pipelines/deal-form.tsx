@@ -248,7 +248,7 @@ export function DealForm({
   }, [open, contactId, supabase]);
 
   async function handleSave() {
-    if (!title.trim() || !contactId || !stageId) {
+    if (!contactId || !stageId) {
       toast.error(t("toastRequired"));
       return;
     }
@@ -850,7 +850,6 @@ export function DealForm({
                   saving ||
                   productDataLoading ||
                   productDataError ||
-                  !title.trim() ||
                   !contactId ||
                   !stageId
                 }
