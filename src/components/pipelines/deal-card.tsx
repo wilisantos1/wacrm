@@ -2,7 +2,7 @@
 
 import type { Deal, PipelineStage } from "@/types";
 import { Calendar, Check, X } from "lucide-react";
-import { formatCurrency } from "@/lib/currency";
+import { getDealServiceStatus } from "@/lib/deal-service-status";
 import { useTranslations } from "next-intl";
 
 interface DealCardProps {
@@ -32,6 +32,7 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
+  const serviceStatus = getDealServiceStatus(deal);
   const tripTimes = [
     ["baseDepartureAt", deal.base_departure_at],
     ["customerArrivalAt", deal.customer_arrival_at],
@@ -71,7 +72,9 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
 
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0 flex-1">
-          <span className="block text-[10px] text-muted-foreground">{t("customer")}</span>
+          <span className="block text-[10px] text-muted-foreground">
+            {t("customer")}
+          </span>
           <h4 className="truncate text-sm font-semibold leading-snug text-foreground">
             {contactLabel}
           </h4>
@@ -94,6 +97,20 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
           )}
         </div>
       </div>
+
+      {serviceStatus && (
+        <div className="mt-2">
+          <span
+            className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+              serviceStatus === "on-time"
+                ? "bg-emerald-500/15 text-emerald-400"
+                : "bg-red-500/15 text-red-400"
+            }`}
+          >
+            {t(serviceStatus === "on-time" ? "onTime" : "late")}
+          </span>
+        </div>
+      )}
 
       <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] leading-snug">
         {details.map(([label, value]) => (
@@ -125,19 +142,16 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         </div>
       )}
 
-      <div className="mt-2 flex items-center justify-between">
-        <span className="text-sm font-bold text-primary">
-          {formatCurrency(deal.value, deal.currency)}
-        </span>
-        {deal.expected_close_date && (
+      {deal.expected_close_date && (
+        <div className="mt-2 flex justify-end">
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
             {new Date(`${deal.expected_close_date}T00:00:00`).toLocaleDateString(
               "pt-BR",
             )}
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {assigneeLabel && (
         <div className="mt-2 flex items-center justify-end">

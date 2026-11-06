@@ -528,6 +528,8 @@
       "noContact": "Sem contato",
       "customer": "Cliente",
       "os": "OS",
+      "onTime": "On Time",
+      "late": "Atraso",
       "container": "Contêiner",
       "serviceAt": "Atendimento",
       "driver": "Motorista",
@@ -637,6 +639,9 @@
       "toastDeleted": "Funil excluído"
     },
     "analytics": {
+      "totalAppointments": "Total de atendimentos",
+      "onTimeAppointments": "Atendimentos On Time",
+      "lateAppointments": "Atendimentos em atraso",
       "totalDeals": "Total de Negócios",
       "totalDealsTooltip": "Contagem de cada negócio neste funil que não está marcado como Perdido. Negócios ganhos ainda estão incluídos.",
       "pipelineValue": "Valor do Funil",

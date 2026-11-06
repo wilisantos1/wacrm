@@ -528,6 +528,8 @@
       "noContact": "연락처 없음",
       "customer": "고객",
       "os": "작업 지시",
+      "onTime": "정시",
+      "late": "지연",
       "container": "컨테이너",
       "serviceAt": "서비스",
       "driver": "운전자",
@@ -637,6 +639,9 @@
       "toastDeleted": "파이프라인이 삭제되었습니다"
     },
     "analytics": {
+      "totalAppointments": "전체 서비스",
+      "onTimeAppointments": "정시 서비스",
+      "lateAppointments": "지연된 서비스",
       "totalDeals": "전체 딜",
       "totalDealsTooltip": "실패로 표시되지 않은, 이 파이프라인의 모든 딜 수입니다. 성사된 딜도 포함됩니다.",
       "pipelineValue": "파이프라인 금액",

@@ -528,6 +528,8 @@
       "noContact": "No contact",
       "customer": "Customer",
       "os": "Work order",
+      "onTime": "On Time",
+      "late": "Late",
       "container": "Container",
       "serviceAt": "Service",
       "driver": "Driver",
@@ -637,6 +639,9 @@
       "toastDeleted": "Pipeline deleted"
     },
     "analytics": {
+      "totalAppointments": "Total appointments",
+      "onTimeAppointments": "On Time appointments",
+      "lateAppointments": "Late appointments",
       "totalDeals": "Total Deals",
       "totalDealsTooltip": "Count of every deal in this pipeline that isn't marked as Lost. Won deals are still included.",
       "pipelineValue": "Pipeline Value",
