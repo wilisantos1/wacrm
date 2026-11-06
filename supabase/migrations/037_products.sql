@@ -17,6 +17,11 @@ CREATE TRIGGER set_updated_at BEFORE UPDATE ON products
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
 ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "Account members can view products" ON products;
+CREATE POLICY "Account members can view products" ON products
+  FOR SELECT
+  USING (is_account_member(account_id, 'viewer'));
+
 DROP POLICY IF EXISTS "Account agents can manage products" ON products;
 CREATE POLICY "Account agents can manage products" ON products
   FOR ALL

@@ -1249,6 +1249,7 @@
     "invalidProduct": "이름과 0 이상의 올바른 가격을 입력하세요.",
     "accountUnavailable": "계정을 확인할 수 없습니다.",
     "loadError": "제품을 불러오지 못했습니다.",
+    "migrationRequired": "데이터베이스에 제품 테이블이 없습니다. 037_products.sql을 적용하세요.",
     "saveError": "제품을 저장하지 못했습니다.",
     "deleteError": "제품을 삭제하지 못했습니다.",
     "created": "제품이 생성되었습니다.",

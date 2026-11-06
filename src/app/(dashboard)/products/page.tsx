@@ -47,7 +47,17 @@ export default function ProductsPage() {
       .eq("account_id", accountId)
       .order("created_at", { ascending: false });
     if (error) {
-      toast.error(t("loadError"));
+      console.error("[ProductsPage] Failed to load products:", {
+        message: error.message,
+        code: error.code,
+        details: error.details,
+        hint: error.hint,
+      });
+      toast.error(
+        error.code === "42P01" || error.code === "PGRST205"
+          ? t("migrationRequired")
+          : t("loadError"),
+      );
       setLoading(false);
       return;
     }

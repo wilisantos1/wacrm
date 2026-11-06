@@ -1249,6 +1249,7 @@
     "invalidProduct": "Enter a name and a valid non-negative price.",
     "accountUnavailable": "Your account could not be verified.",
     "loadError": "Failed to load products.",
+    "migrationRequired": "The products table is missing from the database. Apply 037_products.sql.",
     "saveError": "Failed to save product.",
     "deleteError": "Failed to delete product.",
     "created": "Product created.",
