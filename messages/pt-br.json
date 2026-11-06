@@ -523,6 +523,16 @@
     },
     "card": {
       "noContact": "Sem contato",
+      "customer": "Cliente",
+      "os": "OS",
+      "container": "Contêiner",
+      "serviceAt": "Atendimento",
+      "driver": "Motorista",
+      "truckPlate": "Placa",
+      "baseDepartureAt": "Saída da base",
+      "customerArrivalAt": "Chegada no cliente",
+      "customerDepartureAt": "Saída do cliente",
+      "baseArrivalAt": "Chegada na base",
       "won": "Ganho",
       "lost": "Perdido"
     },

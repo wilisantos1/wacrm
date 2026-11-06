@@ -12,11 +12,13 @@ interface DealCardProps {
   isOverlay?: boolean;
 }
 
-function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
+function formatDateTime(dateStr: string) {
+  return new Date(dateStr).toLocaleString("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
     year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
   });
 }
 
@@ -30,6 +32,19 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
   const t = useTranslations("Pipelines.card");
   const contactLabel = deal.contact?.name || deal.contact?.phone || t("noContact");
   const assigneeLabel = deal.assignee?.full_name || null;
+  const tripTimes = [
+    ["baseDepartureAt", deal.base_departure_at],
+    ["customerArrivalAt", deal.customer_arrival_at],
+    ["customerDepartureAt", deal.customer_departure_at],
+    ["baseArrivalAt", deal.base_arrival_at],
+  ] as const;
+  const hasTripTimes = tripTimes.some(([, value]) => value);
+  const details: [string, string | null | undefined][] = [
+    [t("container"), deal.container_number],
+    [t("serviceAt"), deal.service_at ? formatDateTime(deal.service_at) : null],
+    [t("driver"), deal.driver_name],
+    [t("truckPlate"), deal.truck_plate],
+  ];
 
   return (
     <button
@@ -55,30 +70,60 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
       />
 
       <div className="flex items-start justify-between gap-2">
-        <h4 className="flex-1 text-sm font-semibold leading-snug text-foreground break-words">
-          {deal.title || deal.container_number || deal.contact?.name || t("noContact")}
-        </h4>
-        {deal.status === "won" && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
-            <Check className="h-3 w-3" />
-            {t("won")}
+        <div className="min-w-0 flex-1">
+          <span className="block text-[10px] text-muted-foreground">{t("customer")}</span>
+          <h4 className="truncate text-sm font-semibold leading-snug text-foreground">
+            {contactLabel}
+          </h4>
+        </div>
+        <div className="flex shrink-0 flex-col items-end gap-1">
+          <span className="rounded bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+            {t("os")}: {deal.title || "—"}
           </span>
-        )}
-        {deal.status === "lost" && (
-          <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
-            <X className="h-3 w-3" />
-            {t("lost")}
-          </span>
-        )}
+          {deal.status === "won" && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-semibold text-primary">
+              <Check className="h-3 w-3" />
+              {t("won")}
+            </span>
+          )}
+          {deal.status === "lost" && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-500/15 px-2 py-0.5 text-[10px] font-semibold text-red-400">
+              <X className="h-3 w-3" />
+              {t("lost")}
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* Contact row */}
-      <div className="mt-2 flex items-center gap-2">
-        <span className="flex h-5 w-5 items-center justify-center rounded-full bg-muted text-[10px] font-semibold text-foreground">
-          {initials(deal.contact?.name, deal.contact?.phone)}
-        </span>
-        <span className="truncate text-xs text-muted-foreground">{contactLabel}</span>
+      <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1.5 text-[11px] leading-snug">
+        {details.map(([label, value]) => (
+          <div key={label} className="min-w-0">
+            <span className="block text-muted-foreground">{label}</span>
+            <span
+              className="block truncate font-medium text-foreground"
+              title={value || undefined}
+            >
+              {value || "—"}
+            </span>
+          </div>
+        ))}
       </div>
+
+      {hasTripTimes && (
+        <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 rounded-md bg-background/50 px-2 py-1.5 text-[10px] leading-snug">
+          {tripTimes.map(([key, value]) => (
+            <div key={key} className="min-w-0">
+              <span className="block text-muted-foreground">{t(key)}</span>
+              <span
+                className="block truncate text-foreground"
+                title={value ? formatDateTime(value) : undefined}
+              >
+                {value ? formatDateTime(value) : "—"}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="mt-2 flex items-center justify-between">
         <span className="text-sm font-bold text-primary">
@@ -87,7 +132,9 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         {deal.expected_close_date && (
           <span className="flex items-center gap-1 text-[11px] text-muted-foreground">
             <Calendar className="h-3 w-3" />
-            {formatDate(deal.expected_close_date)}
+            {new Date(`${deal.expected_close_date}T00:00:00`).toLocaleDateString(
+              "pt-BR",
+            )}
           </span>
         )}
       </div>

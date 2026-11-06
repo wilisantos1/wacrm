@@ -523,6 +523,16 @@
     },
     "card": {
       "noContact": "연락처 없음",
+      "customer": "고객",
+      "os": "작업 지시",
+      "container": "컨테이너",
+      "serviceAt": "서비스",
+      "driver": "운전자",
+      "truckPlate": "번호판",
+      "baseDepartureAt": "기지 출발",
+      "customerArrivalAt": "고객 도착",
+      "customerDepartureAt": "고객 출발",
+      "baseArrivalAt": "기지 도착",
       "won": "성사",
       "lost": "실패"
     },
