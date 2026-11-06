@@ -16,11 +16,11 @@ import type {
   Profile,
 } from "@/types";
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -54,6 +54,19 @@ function getProductsTotal(items: DealProductInput[]) {
   );
 }
 
+function toDateTimeLocal(value?: string | null) {
+  if (!value) return "";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "";
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60_000)
+    .toISOString()
+    .slice(0, 16);
+}
+
+function toISOStringOrNull(value: string) {
+  return value ? new Date(value).toISOString() : null;
+}
+
 interface DealFormProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -85,6 +98,14 @@ export function DealForm({
   const [assignedTo, setAssignedTo] = useState("");
   const [expectedCloseDate, setExpectedCloseDate] = useState("");
   const [notes, setNotes] = useState("");
+  const [containerNumber, setContainerNumber] = useState("");
+  const [serviceAt, setServiceAt] = useState("");
+  const [driverName, setDriverName] = useState("");
+  const [truckPlate, setTruckPlate] = useState("");
+  const [baseDepartureAt, setBaseDepartureAt] = useState("");
+  const [customerArrivalAt, setCustomerArrivalAt] = useState("");
+  const [customerDepartureAt, setCustomerDepartureAt] = useState("");
+  const [baseArrivalAt, setBaseArrivalAt] = useState("");
 
   const [contacts, setContacts] = useState<Contact[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
@@ -100,7 +121,7 @@ export function DealForm({
   const [deleting, setDeleting] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
 
-  // Reset the form fields every time the sheet opens or its input
+  // Reset the form fields every time the dialog opens or its input
   // props change. This is a legitimate prop-driven sync; the rule is
   // over-cautious here, hence the block-level disable.
   /* eslint-disable react-hooks/set-state-in-effect */
@@ -118,6 +139,14 @@ export function DealForm({
       setAssignedTo(deal.assigned_to ?? "");
       setExpectedCloseDate(deal.expected_close_date ?? "");
       setNotes(deal.notes ?? "");
+      setContainerNumber(deal.container_number ?? "");
+      setServiceAt(toDateTimeLocal(deal.service_at));
+      setDriverName(deal.driver_name ?? "");
+      setTruckPlate(deal.truck_plate ?? "");
+      setBaseDepartureAt(toDateTimeLocal(deal.base_departure_at));
+      setCustomerArrivalAt(toDateTimeLocal(deal.customer_arrival_at));
+      setCustomerDepartureAt(toDateTimeLocal(deal.customer_departure_at));
+      setBaseArrivalAt(toDateTimeLocal(deal.base_arrival_at));
       setDealProducts([]);
     } else {
       setTitle("");
@@ -128,13 +157,21 @@ export function DealForm({
       setAssignedTo("");
       setExpectedCloseDate("");
       setNotes("");
+      setContainerNumber("");
+      setServiceAt("");
+      setDriverName("");
+      setTruckPlate("");
+      setBaseDepartureAt("");
+      setCustomerArrivalAt("");
+      setCustomerDepartureAt("");
+      setBaseArrivalAt("");
       setDealProducts([]);
     }
     setProductDataError(false);
   }, [open, deal, defaultStageId, stages, defaultCurrency]);
   /* eslint-enable react-hooks/set-state-in-effect */
 
-  // Load supporting data once the sheet is open
+  // Load supporting data once the dialog is open
   useEffect(() => {
     if (!open || !accountId) return;
     let cancelled = false;
@@ -220,6 +257,21 @@ export function DealForm({
       toast.error(t("toastSelectProducts"));
       return;
     }
+    const dateTimeValues = [
+      serviceAt,
+      baseDepartureAt,
+      customerArrivalAt,
+      customerDepartureAt,
+      baseArrivalAt,
+    ];
+    if (
+      dateTimeValues.some(
+        (dateTime) => dateTime && Number.isNaN(new Date(dateTime).getTime()),
+      )
+    ) {
+      toast.error(t("toastInvalidDateTime"));
+      return;
+    }
     setSaving(true);
 
     const productsTotal = getProductsTotal(dealProducts);
@@ -235,6 +287,14 @@ export function DealForm({
       assigned_to: assignedTo || null,
       notes: notes.trim() || null,
       expected_close_date: expectedCloseDate || null,
+      container_number: containerNumber.trim() || null,
+      service_at: toISOStringOrNull(serviceAt),
+      driver_name: driverName.trim() || null,
+      truck_plate: truckPlate.trim() || null,
+      base_departure_at: toISOStringOrNull(baseDepartureAt),
+      customer_arrival_at: toISOStringOrNull(customerArrivalAt),
+      customer_departure_at: toISOStringOrNull(customerDepartureAt),
+      base_arrival_at: toISOStringOrNull(baseArrivalAt),
     };
 
     let dealId: string;
@@ -244,7 +304,11 @@ export function DealForm({
         .update({ ...payload, value: deal.value })
         .eq("id", deal.id);
       if (error) {
-        toast.error(t("toastFailedSave"));
+        toast.error(
+          error.code === "42703" || error.code === "PGRST204"
+            ? t("toastTransportMigrationRequired")
+            : t("toastFailedSave"),
+        );
         setSaving(false);
         return;
       }
@@ -266,11 +330,20 @@ export function DealForm({
       }
       const { data, error } = await supabase
         .from("deals")
-        .insert({ ...payload, user_id: user.id, account_id: accountId, status: "open" })
+        .insert({
+          ...payload,
+          user_id: user.id,
+          account_id: accountId,
+          status: "open",
+        })
         .select("id")
         .single();
       if (error || !data) {
-        toast.error(t("toastFailedCreate"));
+        toast.error(
+          error?.code === "42703" || error?.code === "PGRST204"
+            ? t("toastTransportMigrationRequired")
+            : t("toastFailedCreate"),
+        );
         setSaving(false);
         return;
       }
@@ -389,54 +462,112 @@ export function DealForm({
   }
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
-        side="right"
-        className="bg-popover border-border text-popover-foreground sm:max-w-lg w-full p-0"
-      >
-        <div className="flex h-full flex-col">
-          <SheetHeader className="border-b border-border/50 p-4">
-            <SheetTitle className="text-popover-foreground">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="flex max-h-[90vh] flex-col gap-0 overflow-hidden border-border bg-popover p-0 text-popover-foreground sm:max-w-3xl">
+        <div className="flex min-h-0 flex-1 flex-col">
+          <DialogHeader className="shrink-0 border-b border-border/50 p-4">
+            <DialogTitle className="text-popover-foreground">
               {deal ? t("editDeal") : t("newDeal")}
-            </SheetTitle>
-          </SheetHeader>
+            </DialogTitle>
+          </DialogHeader>
 
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">{t("title")}</Label>
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                placeholder={t("titlePlaceholder")}
-                className="border-border bg-muted text-foreground"
-              />
-            </div>
-
-            <div className="grid gap-2">
-              <Label className="text-muted-foreground">{t("contact")}</Label>
-              <select
-                value={contactId}
-                onChange={(e) => setContactId(e.target.value)}
-                className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
-              >
-                <option value="">{t("selectContact")}</option>
-                {contacts.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name || c.phone}
-                  </option>
-                ))}
-              </select>
-
-              {linkedConversation && (
-                <Link
-                  href="/inbox"
-                  className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
+          <div className="min-h-0 flex-1 space-y-5 overflow-y-auto p-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("contact")}</Label>
+                <select
+                  value={contactId}
+                  onChange={(e) => setContactId(e.target.value)}
+                  className="h-9 w-full rounded-lg border border-border bg-muted px-2.5 text-sm text-foreground outline-none focus:border-primary focus:ring-1 focus:ring-primary"
                 >
-                  <MessageSquare className="h-3 w-3" />
-                  {t("linkToConversation")}
-                </Link>
-              )}
+                  <option value="">{t("selectContact")}</option>
+                  {contacts.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name || c.phone}
+                    </option>
+                  ))}
+                </select>
+
+                {linkedConversation && (
+                  <Link
+                    href="/inbox"
+                    className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
+                  >
+                    <MessageSquare className="h-3 w-3" />
+                    {t("linkToConversation")}
+                  </Link>
+                )}
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("os")}</Label>
+                <Input
+                  value={title}
+                  onChange={(e) => setTitle(e.target.value)}
+                  placeholder={t("osPlaceholder")}
+                  className="border-border bg-muted text-foreground"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("container")}</Label>
+                <Input
+                  value={containerNumber}
+                  onChange={(e) => setContainerNumber(e.target.value)}
+                  placeholder={t("containerPlaceholder")}
+                  className="border-border bg-muted text-foreground"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("serviceAt")}</Label>
+                <Input
+                  type="datetime-local"
+                  value={serviceAt}
+                  onChange={(e) => setServiceAt(e.target.value)}
+                  className="border-border bg-muted text-foreground"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("driver")}</Label>
+                <Input
+                  value={driverName}
+                  onChange={(e) => setDriverName(e.target.value)}
+                  placeholder={t("driverPlaceholder")}
+                  className="border-border bg-muted text-foreground"
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label className="text-muted-foreground">{t("truckPlate")}</Label>
+                <Input
+                  value={truckPlate}
+                  onChange={(e) => setTruckPlate(e.target.value)}
+                  placeholder={t("truckPlatePlaceholder")}
+                  className="border-border bg-muted text-foreground"
+                />
+              </div>
             </div>
+
+            <section className="space-y-3 rounded-lg border border-border bg-muted/20 p-3">
+              <h3 className="text-sm font-medium text-foreground">
+                {t("tripSchedule")}
+              </h3>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {([
+                  ["baseDepartureAt", baseDepartureAt, setBaseDepartureAt],
+                  ["customerArrivalAt", customerArrivalAt, setCustomerArrivalAt],
+                  ["customerDepartureAt", customerDepartureAt, setCustomerDepartureAt],
+                  ["baseArrivalAt", baseArrivalAt, setBaseArrivalAt],
+                ] as const).map(([field, value, setValue]) => (
+                  <div key={field} className="grid gap-2">
+                    <Label className="text-muted-foreground">{t(field)}</Label>
+                    <Input
+                      type="datetime-local"
+                      value={value}
+                      onChange={(e) => setValue(e.target.value)}
+                      className="border-border bg-muted text-foreground"
+                    />
+                  </div>
+                ))}
+              </div>
+            </section>
 
             <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-3">
               <div className="flex items-center justify-between gap-2">
@@ -704,7 +835,7 @@ export function DealForm({
             )}
           </div>
 
-          <div className="border-t border-border/50 bg-popover/80 p-4">
+          <div className="shrink-0 border-t border-border/50 bg-popover/80 p-4">
             <div className="flex gap-2">
               <Button
                 variant="outline"
@@ -764,7 +895,7 @@ export function DealForm({
               ))}
           </div>
         </div>
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

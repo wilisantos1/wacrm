@@ -380,6 +380,14 @@ export interface Deal {
   currency?: string;
   notes?: string;
   expected_close_date?: string;
+  container_number?: string | null;
+  service_at?: string | null;
+  driver_name?: string | null;
+  truck_plate?: string | null;
+  base_departure_at?: string | null;
+  customer_arrival_at?: string | null;
+  customer_departure_at?: string | null;
+  base_arrival_at?: string | null;
   status?: DealStatus;
   created_at: string;
   updated_at?: string;
