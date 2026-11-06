@@ -1,7 +1,7 @@
 "use client";
 
 import type { Deal } from "@/types";
-import { CalendarDays, CheckCircle2, Clock3 } from "lucide-react";
+import { CalendarDays, CheckCircle2, Clock3, Percent } from "lucide-react";
 import { getDealServiceStatus } from "@/lib/deal-service-status";
 import { useTranslations } from "next-intl";
 
@@ -21,9 +21,14 @@ export function PipelineAnalytics({ deals }: PipelineAnalyticsProps) {
     },
     { onTimeCount: 0, lateCount: 0 },
   );
+  const classifiedAppointments = onTimeCount + lateCount;
+  const onTimePercentage =
+    classifiedAppointments === 0
+      ? "0.0%"
+      : `${((onTimeCount / classifiedAppointments) * 100).toFixed(1)}%`;
 
   return (
-    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+    <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
       <Metric
         icon={<CalendarDays className="h-4 w-4 text-muted-foreground" />}
         label={t("totalAppointments")}
@@ -41,6 +46,11 @@ export function PipelineAnalytics({ deals }: PipelineAnalyticsProps) {
         value={lateCount}
         valueClassName="text-red-400"
       />
+      <Metric
+        icon={<Percent className="h-4 w-4 text-primary" />}
+        label={t("onTimePercentage")}
+        value={onTimePercentage}
+      />
     </div>
   );
 }
@@ -53,7 +63,7 @@ function Metric({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: number;
+  value: number | string;
   valueClassName?: string;
 }) {
   return (

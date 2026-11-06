@@ -642,6 +642,7 @@
       "totalAppointments": "전체 서비스",
       "onTimeAppointments": "정시 서비스",
       "lateAppointments": "지연된 서비스",
+      "onTimePercentage": "정시 비율",
       "totalDeals": "전체 딜",
       "totalDealsTooltip": "실패로 표시되지 않은, 이 파이프라인의 모든 딜 수입니다. 성사된 딜도 포함됩니다.",
       "pipelineValue": "파이프라인 금액",

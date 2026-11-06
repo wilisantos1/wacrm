@@ -642,6 +642,7 @@
       "totalAppointments": "Total de atendimentos",
       "onTimeAppointments": "Atendimentos On Time",
       "lateAppointments": "Atendimentos em atraso",
+      "onTimePercentage": "% On Time",
       "totalDeals": "Total de Negócios",
       "totalDealsTooltip": "Contagem de cada negócio neste funil que não está marcado como Perdido. Negócios ganhos ainda estão incluídos.",
       "pipelineValue": "Valor do Funil",
