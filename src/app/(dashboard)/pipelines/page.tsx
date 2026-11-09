@@ -223,6 +223,44 @@ export default function PipelinesPage() {
     setDeals(await loadDeals(selectedPipelineId));
   }, [loadDeals, selectedPipelineId]);
 
+  useEffect(() => {
+    if (!selectedPipelineId) return;
+
+    let active = true;
+    const syncDeals = () => {
+      void loadDeals(selectedPipelineId).then((nextDeals) => {
+        if (active) setDeals(nextDeals);
+      });
+    };
+
+    const channel = supabase
+      .channel(`pipeline-deals:${selectedPipelineId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "deals",
+          filter: `pipeline_id=eq.${selectedPipelineId}`,
+        },
+        syncDeals,
+      )
+      .subscribe((status) => {
+        if (status === "SUBSCRIBED") {
+          syncDeals();
+        } else if (status === "CHANNEL_ERROR" || status === "TIMED_OUT") {
+          console.error(
+            `[PipelinesPage] Realtime subscription ${status.toLowerCase()} for deals`,
+          );
+        }
+      });
+
+    return () => {
+      active = false;
+      void supabase.removeChannel(channel);
+    };
+  }, [selectedPipelineId, supabase, loadDeals]);
+
   const handleDealMoved = useCallback(
     async (dealId: string, newStageId: string) => {
       const deal = deals.find((item) => item.id === dealId);
