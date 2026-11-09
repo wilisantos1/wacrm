@@ -504,6 +504,8 @@
       "addDeal": "Adicionar Negócio",
       "filterByServiceDate": "Filtrar atendimentos por data",
       "filterToday": "Hoje",
+      "filterThisMonth": "Esse mês",
+      "filterPreviousMonth": "Mês anterior",
       "clearDateFilter": "Limpar filtro",
       "createToStartTracking": "Crie um funil para começar a rastrear negócios",
       "createPipeline": "Criar Funil",

@@ -30,6 +30,11 @@ import { useCan } from "@/hooks/use-can";
 import { useAuth } from "@/hooks/use-auth";
 import { GatedButton } from "@/components/ui/gated-button";
 import { useTranslations } from "next-intl";
+import { localDayKey } from "@/lib/dashboard/date-utils";
+import {
+  matchesServiceDateFilter,
+  type ServiceDateFilter,
+} from "@/lib/pipelines/service-date-filter";
 
 // Pipeline creation is admin-class (settings-tier write under
 // the new RLS); deal creation is operational and only requires
@@ -56,7 +61,9 @@ export default function PipelinesPage() {
   const [selectedPipelineId, setSelectedPipelineId] = useState<string>("");
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [deals, setDeals] = useState<Deal[]>([]);
-  const [serviceDateFilter, setServiceDateFilter] = useState("");
+  const [serviceDateFilter, setServiceDateFilter] = useState<ServiceDateFilter>(
+    () => ({ type: "day", value: localDayKey(new Date()) }),
+  );
   const [loading, setLoading] = useState(true);
 
   // Dialog / sheet state
@@ -297,37 +304,29 @@ export default function PipelinesPage() {
   }
 
   const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
-  const visibleDeals = serviceDateFilter
-    ? deals.filter((deal) => {
-        if (!deal.service_at) return false;
-        const serviceDate = new Date(deal.service_at);
-        const localDate = [
-          serviceDate.getFullYear(),
-          String(serviceDate.getMonth() + 1).padStart(2, "0"),
-          String(serviceDate.getDate()).padStart(2, "0"),
-        ].join("-");
-        return localDate === serviceDateFilter;
-      })
-    : deals;
-
-  function getLocalDateValue(date: Date) {
-    return [
-      date.getFullYear(),
-      String(date.getMonth() + 1).padStart(2, "0"),
-      String(date.getDate()).padStart(2, "0"),
-    ].join("-");
-  }
+  const visibleDeals = deals.filter((deal) =>
+    matchesServiceDateFilter(deal.service_at, serviceDateFilter),
+  );
+  const isTodayFilter =
+    serviceDateFilter?.type === "day" &&
+    serviceDateFilter.value === localDayKey(new Date());
+  const isThisMonthFilter = serviceDateFilter?.type === "this-month";
+  const isPreviousMonthFilter =
+    serviceDateFilter?.type === "previous-month";
 
   if (loading) {
     return (
-      <div className="space-y-6">
+      <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
         <div className="flex items-center justify-between">
           <div className="h-8 w-48 animate-pulse rounded bg-muted" />
           <div className="h-9 w-28 animate-pulse rounded-lg bg-muted" />
         </div>
-        <div className="flex gap-3">
+        <div className="flex min-h-0 flex-1 gap-3 overflow-x-auto overflow-y-hidden">
           {[1, 2, 3, 4, 5].map((i) => (
-            <div key={i} className="h-96 w-72 animate-pulse rounded-xl bg-muted/50" />
+            <div
+              key={i}
+              className="h-full min-h-0 w-72 shrink-0 animate-pulse rounded-xl bg-muted/50"
+            />
           ))}
         </div>
       </div>
@@ -335,7 +334,7 @@ export default function PipelinesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="flex h-full min-h-0 flex-col gap-6 overflow-hidden">
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
@@ -420,28 +419,67 @@ export default function PipelinesPage() {
             <Input
               id="service-date-filter"
               type="date"
-              value={serviceDateFilter}
-              onChange={(event) => setServiceDateFilter(event.target.value)}
+              value={
+                serviceDateFilter?.type === "day"
+                  ? serviceDateFilter.value
+                  : ""
+              }
+              onChange={(event) =>
+                setServiceDateFilter(
+                  event.target.value
+                    ? { type: "day", value: event.target.value }
+                    : null,
+                )
+              }
               className="h-9 w-auto min-w-40 border-border bg-muted text-foreground"
             />
           </div>
           <Button
             type="button"
-            variant={serviceDateFilter === getLocalDateValue(new Date()) ? "default" : "outline"}
-            onClick={() => setServiceDateFilter(getLocalDateValue(new Date()))}
+            variant={isTodayFilter ? "default" : "outline"}
+            onClick={() =>
+              setServiceDateFilter({
+                type: "day",
+                value: localDayKey(new Date()),
+              })
+            }
             className={
-              serviceDateFilter === getLocalDateValue(new Date())
+              isTodayFilter
                 ? "h-9"
                 : "h-9 border-border bg-card text-foreground hover:bg-muted"
             }
           >
             {t("filterToday")}
           </Button>
+          <Button
+            type="button"
+            variant={isThisMonthFilter ? "default" : "outline"}
+            onClick={() => setServiceDateFilter({ type: "this-month" })}
+            className={
+              isThisMonthFilter
+                ? "h-9"
+                : "h-9 border-border bg-card text-foreground hover:bg-muted"
+            }
+          >
+            {t("filterThisMonth")}
+          </Button>
+          <Button
+            type="button"
+            variant={isPreviousMonthFilter ? "default" : "outline"}
+            onClick={() => setServiceDateFilter({ type: "previous-month" })}
+            className={
+              isPreviousMonthFilter
+                ? "h-9"
+                : "h-9 border-border bg-card text-foreground hover:bg-muted"
+            }
+          >
+            {t("filterPreviousMonth")}
+          </Button>
           {serviceDateFilter && (
             <Button
               type="button"
               variant="ghost"
-              onClick={() => setServiceDateFilter("")}
+              onClick={() => setServiceDateFilter(null)}
               className="h-9 text-muted-foreground"
             >
               {t("clearDateFilter")}
@@ -452,7 +490,7 @@ export default function PipelinesPage() {
 
       {/* Board */}
       {pipelines.length === 0 ? (
-        <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-border py-20">
+        <div className="flex min-h-0 flex-1 flex-col items-center justify-center rounded-xl border border-dashed border-border py-20">
           <GitBranch className="h-12 w-12 text-muted-foreground" />
           <h3 className="mt-4 text-lg font-medium text-foreground">
             {t("noPipelinesYet")}
@@ -473,13 +511,15 @@ export default function PipelinesPage() {
       ) : (
         <>
           <PipelineAnalytics deals={visibleDeals} />
-          <PipelineBoard
-            stages={stages}
-            deals={visibleDeals}
-            onDealMoved={handleDealMoved}
-            onAddDeal={handleAddDeal}
-            onEditDeal={handleEditDeal}
-          />
+          <div className="flex min-h-0 flex-1 flex-col">
+            <PipelineBoard
+              stages={stages}
+              deals={visibleDeals}
+              onDealMoved={handleDealMoved}
+              onAddDeal={handleAddDeal}
+              onEditDeal={handleEditDeal}
+            />
+          </div>
         </>
       )}
 

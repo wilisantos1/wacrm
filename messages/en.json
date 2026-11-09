@@ -504,6 +504,8 @@
       "addDeal": "Add Deal",
       "filterByServiceDate": "Filter services by date",
       "filterToday": "Today",
+      "filterThisMonth": "This month",
+      "filterPreviousMonth": "Previous month",
       "clearDateFilter": "Clear filter",
       "createToStartTracking": "Create a pipeline to start tracking deals",
       "createPipeline": "Create Pipeline",
