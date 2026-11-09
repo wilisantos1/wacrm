@@ -35,6 +35,7 @@ import {
   matchesServiceDateFilter,
   type ServiceDateFilter,
 } from "@/lib/pipelines/service-date-filter";
+import { getStageTimestampUpdate } from "@/lib/pipelines/stage-timestamps";
 
 // Pipeline creation is admin-class (settings-tier write under
 // the new RLS); deal creation is operational and only requires
@@ -224,10 +225,68 @@ export default function PipelinesPage() {
 
   const handleDealMoved = useCallback(
     async (dealId: string, newStageId: string) => {
+      const deal = deals.find((item) => item.id === dealId);
+      const destinationStage = stages.find((stage) => stage.id === newStageId);
+      const timestampUpdate =
+        deal && destinationStage
+          ? getStageTimestampUpdate(
+              destinationStage.name,
+              deal,
+              new Date().toISOString(),
+            )
+          : null;
+
       // Optimistic update — board already animated; just persist.
       setDeals((prev) =>
         prev.map((d) => (d.id === dealId ? { ...d, stage_id: newStageId } : d)),
       );
+
+      if (timestampUpdate) {
+        const { data, error } = await supabase
+          .from("deals")
+          .update({
+            stage_id: newStageId,
+            [timestampUpdate.field]: timestampUpdate.value,
+          })
+          .eq("id", dealId)
+          .is(timestampUpdate.field, null)
+          .select("id")
+          .maybeSingle();
+
+        if (error) {
+          toast.error(t("toastFailedMoveDeal"));
+          refreshDeals();
+          return;
+        }
+
+        if (data) {
+          setDeals((prev) =>
+            prev.map((item) =>
+              item.id === dealId
+                ? {
+                    ...item,
+                    stage_id: newStageId,
+                    [timestampUpdate.field]: timestampUpdate.value,
+                  }
+                : item,
+            ),
+          );
+          return;
+        }
+
+        // The timestamp was filled after this deal was loaded. Keep that
+        // value and persist the stage change without touching the field.
+        const { error: stageError } = await supabase
+          .from("deals")
+          .update({ stage_id: newStageId })
+          .eq("id", dealId);
+        if (stageError) {
+          toast.error(t("toastFailedMoveDeal"));
+        }
+        refreshDeals();
+        return;
+      }
+
       const { error } = await supabase
         .from("deals")
         .update({ stage_id: newStageId })
@@ -237,7 +296,7 @@ export default function PipelinesPage() {
         refreshDeals();
       }
     },
-    [supabase, refreshDeals, t],
+    [deals, stages, supabase, refreshDeals, t],
   );
 
   const handleAddDeal = useCallback(
